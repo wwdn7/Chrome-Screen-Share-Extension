@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Document</title>
+  <script src="https://webrtc.github.io/adapter/adapter-latest.js"></script>
+</head>
+
+<body>
+  <video autoplay controls style="width:1280px;height: 720px;"></video><br>
+  <button id="shareBtn" onclick=getScreenMedia()>屏幕共享</button>
+</body>
+<script>
+  /**
+   * screenCapturing.js
+   */
+
+  // Last time updated on: May 19, 2018
+
+  // Latest file can be found here: https://cdn.webrtc-experiment.com/Screen-Capturing.js
+
+  // Muaz Khan     - www.MuazKhan.com
+  // MIT License   - www.WebRTC-Experiment.com/licence
+  // Documentation - https://github.com/muaz-khan/Chrome-Extensions/tree/master/Screen-Capturing.js
+  // Demo          - https://www.webrtc-experiment.com/Screen-Capturing/
+
+  // ___________________
+  // Screen-Capturing.js
+
+  // Source code: https://github.com/muaz-khan/Chrome-Extensions/tree/master/desktopCapture
+  // Google AppStore installation path: https://chrome.google.com/webstore/detail/screen-capturing/ajhifddimkapgcifgcodmmfdlknahffk
+
+  // This JavaScript file is aimed to explain steps needed to integrate above chrome extension
+  // in your own webpages
+
+  // Usage:
+  // getScreenConstraints(function(screen_constraints) {
+  //    navigator.mediaDevices.getUserMedia({ video: screen_constraints }).then(onSuccess).catch(onFailure );
+  // });
+
+  // First Step: Download the extension, modify "manifest.json" and publish to Google AppStore
+  //             https://github.com/muaz-khan/Chrome-Extensions/tree/master/desktopCapture#how-to-publish-yourself
+
+  // Second Step: Listen for postMessage handler
+  // postMessage is used to exchange "sourceId" between chrome extension and you webpage.
+  // though, there are tons other options as well, e.g. XHR-signaling, websockets, etc.
+  window.addEventListener('message', function (event) {
+    if (event.origin != window.location.origin) {
+      return;
+    }
+
+    onMessageCallback(event.data);
+  });
+
+  // and the function that handles received messages
+
+  function onMessageCallback(data) {
+    // "cancel" button is clicked
+    if (data == 'PermissionDeniedError') {
+      chromeMediaSource = 'PermissionDeniedError';
+      if (screenCallback) return screenCallback('PermissionDeniedError');
+      else throw new Error('PermissionDeniedError');
+    }
+
+    // extension notified his presence
+    if (data == 'rtcmulticonnection-extension-loaded') {
+      chromeMediaSource = 'desktop';
+    }
+
+    // extension shared temp sourceId
+    if (data.sourceId && screenCallback) {
+      screenCallback(sourceId = data.sourceId, data.canRequestAudioTrack === true);
+    }
+  }
+
+  // global variables
+  var chromeMediaSource = 'screen';
+  var sourceId;
+  var screenCallback;
+
+  // this method can be used to check if chrome extension is installed & enabled.
+  function isChromeExtensionAvailable(callback) {
+    if (!callback) return;
+
+    if (chromeMediaSource == 'desktop') return callback(true);
+
+    // ask extension if it is available
+    window.postMessage('are-you-there', '*');
+
+    setTimeout(function () {
+      if (chromeMediaSource == 'screen') {
+        callback(false);
+      } else callback(true);
+    }, 2000);
+  }
+
+  // this function can be used to get "source-id" from the extension
+  function getSourceId(callback) {
+    if (!callback) throw '"callback" parameter is mandatory.';
+    if (sourceId) return callback(sourceId);
+
+    screenCallback = callback;
+    window.postMessage('get-sourceId', '*');
+  }
+
+  // this function can be used to get "source-id" from the extension
+  // function getSourceIdWithAudio(callback) {
+  //   if (!callback) throw '"callback" parameter is mandatory.';
+  //   if (sourceId) return callback(sourceId);
+
+  //   screenCallback = callback;
+  //   window.postMessage('audio-plus-tab', '*');
+  // }
+
+  var isFirefox = typeof window.InstallTrigger !== 'undefined';
+  var isOpera = !!window.opera || navigator.userAgent.indexOf(' OPR/') >= 0;
+  var isChrome = !!window.chrome && !isOpera;
+
+  function getChromeExtensionStatus(extensionid, callback) {
+    if (isFirefox) return callback('not-chrome');
+
+    if (arguments.length != 2) {
+      callback = extensionid;
+      // extensionid = 'ajhifddimkapgcifgcodmmfdlknahffk'; // default extension-id
+      extensionid = 'hikkpdlhpghefbmnnfnpcnpaeelmealb'; // default extension-id
+    }
+
+    var image = document.createElement('img');
+    image.src = 'chrome-extension://' + extensionid + '/icon.png';
+    image.onload = function () {
+      chromeMediaSource = 'screen';
+      window.postMessage('are-you-there', '*');
+      setTimeout(function () {
+        if (chromeMediaSource == 'screen') {
+          callback('installed-disabled');
+        } else callback('installed-enabled');
+      }, 2000);
+    };
+    image.onerror = function () {
+      callback('not-installed');
+    };
+  }
+
+  // function getScreenConstraintsWithAudio(callback) {
+  //   getScreenConstraints(callback, true);
+  // }
+
+  // this function explains how to use above methods/objects
+  function getScreenConstraints(callback, captureSourceIdWithAudio) {
+    var firefoxScreenConstraints = {
+      mozMediaSource: 'window',
+      mediaSource: 'window'
+    };
+
+    if (isFirefox) return callback(null, firefoxScreenConstraints);
+
+    // this statement defines getUserMedia constraints
+    // that will be used to capture content of screen
+    var screen_constraints = {
+      mandatory: {
+        chromeMediaSource: chromeMediaSource,
+        maxWidth: screen.width > 1920 ? screen.width : 1920,
+        maxHeight: screen.height > 1080 ? screen.height : 1080
+      },
+      optional: []
+    };
+
+    // this statement verifies chrome extension availability
+    // if installed and available then it will invoke extension API
+    // otherwise it will fallback to command-line based screen capturing API
+    if (chromeMediaSource == 'desktop' && !sourceId) {
+      if (captureSourceIdWithAudio) {
+        getSourceIdWithAudio(function (sourceId, canRequestAudioTrack) {
+          screen_constraints.mandatory.chromeMediaSourceId = sourceId;
+
+          if (canRequestAudioTrack) {
+            screen_constraints.canRequestAudioTrack = true;
+          }
+          callback(sourceId == 'PermissionDeniedError' ? sourceId : null, screen_constraints);
+        });
+      } else {
+        getSourceId(function (sourceId) {
+          screen_constraints.mandatory.chromeMediaSourceId = sourceId;
+          callback(sourceId == 'PermissionDeniedError' ? sourceId : null, screen_constraints);
+        });
+      }
+      return;
+    }
+
+    // this statement sets gets 'sourceId" and sets "chromeMediaSourceId" 
+    if (chromeMediaSource == 'desktop') {
+      screen_constraints.mandatory.chromeMediaSourceId = sourceId;
+    }
+
+    // now invoking native getUserMedia API
+    callback(null, screen_constraints);
+  }
+
+// ===========================================================
+
+  function getBrowserType() {
+    var browser = {
+      versions: function () {
+        var u = navigator.userAgent,
+          app = navigator.appVersion;
+        return { //移动终端浏览器版本信息  
+          trident: u.indexOf('Trident') > -1, //IE内核  
+          presto: u.indexOf('Presto') > -1, //opera内核  
+          webKit: u.indexOf('AppleWebKit') > -1, //苹果、谷歌内核  
+          gecko: u.indexOf('Gecko') > -1 && u.indexOf('KHTML') == -1, //火狐内核  
+          mobile: !!u.match(/AppleWebKit.*Mobile.*/), //是否为移动终端  
+          ios: !!u.match(/\(i[^;]+;( U;)? CPU.+Mac OS X/), //ios终端  
+          android: u.indexOf('Android') > -1 || u.indexOf('Linux') > -1, //android终端或uc浏览器  
+          iPhone: u.indexOf('iPhone') > -1, //是否为iPhone或者QQHD浏览器  
+          iPad: u.indexOf('iPad') > -1, //是否iPad  
+          webApp: u.indexOf('Safari') == -1 //是否web应该程序，没有头部与底部  
+        };
+      }(),
+      language: (navigator.browserLanguage || navigator.language).toLowerCase()
+    }
+    if (browser.versions.mobile) { //判断是否是移动设备打开。browser代码在下面  
+      var ua = navigator.userAgent.toLowerCase(); //获取判断用的对象  
+      if (ua.match(/MicroMessenger/i) == "micromessenger") {
+        return 'weChat';
+      }
+      if (ua.match(/WeiBo/i) == "weibo") {
+        return 'sinaWeibo';
+      }
+      if (ua.match(/QQ/i) == "qq") {
+        return 'Qzone';
+      }
+      if (browser.versions.ios) {
+        return 'ios';
+      }
+      if (browser.versions.android) {
+        return 'android';
+      }
+
+    } else { //电脑端  
+      var userAgent = navigator.userAgent; //取得浏览器的userAgent字符串  
+      console.log(userAgent);
+
+      //判断是否Opera浏览器  
+      if (userAgent.indexOf("Opera") > -1) {
+        return "Opera"
+      };
+      //判断是否Firefox浏览器  
+      if (userAgent.indexOf("Firefox") > -1) {
+        return "Firefox";
+      }
+      //判断是否chorme浏览器  
+      if (userAgent.indexOf("Chrome") > -1 && userAgent.indexOf("Edge") == -1) {
+        return "Chrome";
+      }
+      //判断是否Safari浏览器  
+      if (userAgent.indexOf("Safari") > -1 && userAgent.indexOf("Chrome") == -1 && userAgent.indexOf("Edge") == -1) {
+        return "Safari";
+      }
+      //判断是否IE浏览器  
+      if (userAgent.indexOf("compatible") > -1 && userAgent.indexOf("MSIE") > -1 && !isOpera) {
+        return "IE";
+      }
+      //判断是否Edge浏览器  
+      if (userAgent.indexOf("Trident") > -1 || userAgent.indexOf("Edge") > -1) {
+        return "Edge";
+      };
+    }
+  }
+
+  function getScreenMedia() {
+    var browserType = getBrowserType();
+    console.log(browserType);
+    var video = document.querySelector('video');
+
+    if (browserType == 'Edge') {
+      navigator.getDisplayMedia({
+        video: true
+      }).then(screenStream => {
+        video.srcObject = screenStream;
+      }, error => {
+        alert(error);
+      });
+    } else if (browserType == 'Firefox') {
+      navigator.mediaDevices.getUserMedia({
+        video: {
+          mediaSource: 'screen' || 'window'
+        }
+      }).then(function (screenStream) {
+        video.srcObject = screenStream;
+      });
+    } else if (!!window.chrome && isChrome) {
+      getSourceId(function (sourceId) {
+        console.log('sourceId', sourceId);
+      })
+      isChromeExtensionAvailable(function (isAvailable) {
+        if (isAvailable == false) {
+          console.log('Chrome 屏幕共享拓展is not available')
+        }
+      });
+      getChromeExtensionStatus(function (status) {
+        console.log('ChromeExtensionStatus', status);
+      });
+      getScreenConstraints(function (err, screen_constraints) {
+        if (err) {
+          return alert(err);
+        }
+        console.log('screen_constraints', screen_constraints);
+        navigator.mediaDevices.getUserMedia({
+          video: screen_constraints
+        }).then(function (stream) {
+          video.srcObject = stream;
+        }).catch(function (error) {
+          alert(JSON.stringify(error, null, '\t'));
+        });
+      })
+    } else {
+      alert('当前浏览器不支持屏幕共享')
+    }
+  }
+</script>
+
+</html>

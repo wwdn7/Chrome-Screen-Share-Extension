@@ -1,0 +1,29 @@
+{
+  "name": "CR Screen Capturing",
+  "author": "CR Victor",
+  "version": "0.0.1",
+  "manifest_version": 2,
+  "minimum_chrome_version": "34",
+  "description": "Capture full-screen or specific application's screen on any HTTPs domain!",
+  "homepage_url": "http://www.cloudroom.com",
+  "background": {
+    "scripts": ["background-script.js"],
+    "persistent": false
+  },
+  "content_scripts": [{
+    "js": ["content-script.js"],
+    "all_frames": true,
+    "run_at": "document_end",
+    "matches": ["http://127.0.0.1:5500/index.html"]
+  }],
+  "browser_action":{
+    "default_title": "./icon.png"
+  },
+  "permissions": [
+    "desktopCapture",
+    "storage"
+  ],
+  "web_accessible_resources": [
+    "icon.png"
+  ]
+}
